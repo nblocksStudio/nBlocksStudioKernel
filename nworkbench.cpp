@@ -1,0 +1,152 @@
+#include "nworkbench.h"
+
+#ifdef TARGET_LPC1768
+
+#endif
+
+#ifdef TARGET_LPC11U35_501
+
+#endif
+
+
+
+Ticker PropagateTicker;
+
+nBlockNode * __firstNode = 0;
+nBlockNode * __last_node = 0;
+nBlockConnection * __first_connection = 0;
+nBlockConnection * __last_connection = 0;
+uint32_t __propagating = 0;
+
+uint32_t __tickerElapsed = 0;
+
+// NBLOCK NODE BASIC CLASS
+nBlockNode::nBlockNode(void) {
+    // placeholder
+    if (__firstNode == 0) __firstNode = this;
+    if (__last_node != 0) __last_node->setNext(this);
+    __last_node = this;
+}
+void nBlockNode::setNext(nBlockNode * next) { this->_next = next; }
+uint32_t nBlockNode::getNext(void) { return (uint32_t)(this->_next); }
+uint32_t nBlockNode::outputAvailable(uint32_t outputNumber) { return 0; }
+uint32_t nBlockNode::readOutput(uint32_t outputNumber) { return 0; }
+void nBlockNode::triggerInput(uint32_t inputNumber, uint32_t value) { return; }
+void nBlockNode::step(void) { return; }
+
+
+
+
+// NBLOCKCONNECTION
+nBlockConnection::nBlockConnection(nBlockNode * srcBlock, uint32_t outputNumber, nBlockNode * dstBlock, uint32_t inputNumber) {
+    this->_srcBlock = srcBlock;
+    this->_outputNumber = outputNumber;
+    this->_dstBlock = dstBlock;
+    this->_inputNumber = inputNumber;
+    this->_next = 0;
+
+    if (__first_connection == 0) __first_connection = this;
+    if (__last_connection != 0) __last_connection->setNext(this);
+    __last_connection = this;
+}
+
+void nBlockConnection::propagate(void) {
+    uint32_t data_available;
+    uint32_t data_type;
+    
+    // Check if the connected output has data available
+    data_available = this->_srcBlock->outputAvailable(this->_outputNumber);
+    if (data_available > 0) {
+        // Data is available. If the output type is string, this is number
+        // of chars to be read. Otherwise, this is a boolean flag
+        
+        // Retrieve data type
+        data_type = this->_srcBlock->readOutputType(this->_outputNumber);
+        // If output type is string:
+        if (data_type == OUTPUT_TYPE_STRING) {
+            // Current does the same as other types, but is set apart
+			// in this IF block for simple forward compatibility
+            uint32_t tmp = this->_srcBlock->readOutput(this->_outputNumber);
+            this->_dstBlock->triggerInput(this->_inputNumber, tmp);
+            
+        }
+        // Otherwise defaults to integer
+        else {
+            uint32_t tmp = this->_srcBlock->readOutput(this->_outputNumber);
+            this->_dstBlock->triggerInput(this->_inputNumber, tmp);
+        }
+    }
+}
+void nBlockConnection::setNext(nBlockConnection * next) {
+    this->_next = next;
+}
+uint32_t nBlockConnection::getNext(void) {
+    return (uint32_t)(this->_next);
+}
+
+
+///////////////////
+void propagateTick(void) {
+    // tickerElapsed is not a boolean flag, it is a counter instead
+    // This means two unserviced ticks will force ProgressNodes()
+    // to run twice
+    // This is a soft realtime system
+    __tickerElapsed++;
+}
+
+
+void SetupWorkbench(void) {
+    __tickerElapsed = 0;
+    PropagateTicker.attach(&propagateTick, 0.001);
+}
+
+uint32_t ProgressNodes(void) {
+    nBlockConnection * econn;
+    nBlockNode * enode;
+    
+	// Counter to store number of iterations actually processed
+    uint32_t num_iterations = 0;
+    
+    // If __tickerElapsed == 0 this call will return immediately
+    while (__tickerElapsed > 0) {
+		// Ignore this call if we are in the middle of a frame already
+        if ((__propagating == 0) && (__first_connection != 0)) {
+            __propagating = 1; // Flag: we are in the middle of a frame
+
+			// Remove one frame tick from the down counter
+			__tickerElapsed--;
+			// Add one iteration to the up counter (return value)
+			num_iterations++;
+
+            // --------
+			// Propagate connections
+			
+            // Get cursor to first connection (connection stage entry point)
+			econn = __first_connection;
+			// Traverse list of connections
+            while (econn != 0) {
+				// Propagate connection under cursor
+                econn->propagate();
+				// Move cursor to next connection
+                econn = (nBlockConnection *)(econn->getNext());
+            }
+            
+			// --------
+            // Step blocks' state machines and fifos
+            
+			// Get cursor to first node (step stage entry point)
+			enode = __firstNode;
+			// Traverse list of nodes
+            while (enode != 0) {
+				// Step node under cursor
+                enode->step();
+				// Move cursor to next node
+                enode = (nBlockNode *)(enode->getNext());
+            }
+            __propagating = 0; // Flag: no longer inside a frame
+        }
+    }
+	// Return the number of frames that were actually processed
+    return num_iterations;
+}
+
