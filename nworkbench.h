@@ -82,9 +82,25 @@
  */
 enum nBlocks_OutputType {
     OUTPUT_TYPE_INT,
-    OUTPUT_TYPE_STRING
+    OUTPUT_TYPE_STRING,
+	OUTPUT_TYPE_FLOAT,
+	OUTPUT_TYPE_ARRAY
 };
 
+/**
+ *  Structure data for messages received by destination nodes.
+ *  The argument for triggerInput() is of this type.
+ */
+typedef struct nBlocks_Message {
+	uint32_t inputNumber;
+	uint32_t intValue;
+	float floatValue;
+	char * stringValue;
+	uint32_t pointerValue;
+	uint32_t dataLength;
+	nBlocks_OutputType dataType;
+	
+} nBlocks_Message;
 
 /**
  *  \brief Configures the n-Blocks Studio kernel and sets the Ticker.
@@ -108,6 +124,15 @@ uint32_t ProgressNodes(void);
 
 
 
+/**
+ *  \brief Packs a float value into an unsigned integer. That is, 
+ *  reinterpret the raw bits allowing it to be stored in a variable
+ *  of type uint32_t.
+ *  
+ *  \param [in] value Float value to be packed
+ *  \return The bits interpreted as uint32_t
+ */
+uint32_t PackFloat(float value);
 
 
 /**
@@ -157,7 +182,7 @@ public:
      *  \param [in] outputNumber The output number to check for data type
      *  \return One of the constants in the nBlocks_OutputType enum
      */
-    virtual uint32_t readOutputType(uint32_t outputNumber)  { return OUTPUT_TYPE_INT; }
+    virtual nBlocks_OutputType readOutputType(uint32_t outputNumber)  { return OUTPUT_TYPE_INT; }
     
     /**
      *  \brief Returns data from one particular output.
@@ -175,10 +200,10 @@ public:
      *  classes defining the actual behaviour. Typical use is to store
      *  the most recent value to be used in the step() method.
      *  
-     *  \param [in] inputNumber The input number this data refers to
-     *  \param [in] value Data value in the message
+     *  \param [in] message A nBlocks_Message packet containing
+     *  	information about the data being received.
      */
-    virtual void triggerInput(uint32_t inputNumber, uint32_t value);
+    virtual void triggerInput(nBlocks_Message message);
     
     /**
      *  \brief Discards any data respective to previous frame and 
@@ -269,7 +294,7 @@ public:
      *  \param [in] outputNumber The output number to check for data type
      *  \return One of the constants in the nBlocks_OutputType enum
      */
-    uint32_t readOutputType(uint32_t outputNumber) { return outputType[outputNumber]; }
+    nBlocks_OutputType readOutputType(uint32_t outputNumber) { return outputType[outputNumber]; }
     
     /**
      *  \brief Returns data stored at the output buffer exposed to
@@ -327,7 +352,7 @@ public:
      *  \brief Buffer holding output types. Should be written 
      *  in constructor only. Defaults to OUTPUT_TYPE_INT
      */
-    uint32_t outputType[simpleNode_OutputSize];
+    nBlocks_OutputType outputType[simpleNode_OutputSize];
     
     /**
     *  \brief Buffer holding data availability, to be modified by user.

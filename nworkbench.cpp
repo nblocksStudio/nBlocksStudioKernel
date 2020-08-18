@@ -20,6 +20,17 @@ uint32_t __propagating = 0;
 
 uint32_t __tickerElapsed = 0;
 
+
+uint32_t PackFloat(float value) {
+	uint32_t packed = 0;
+	// Copy memory contents of value into packed
+	memcpy(&packed, &value, sizeof(packed));
+	// Return packed
+	return packed;
+}
+
+
+
 // NBLOCK NODE BASIC CLASS
 nBlockNode::nBlockNode(void) {
     // placeholder
@@ -31,7 +42,7 @@ void nBlockNode::setNext(nBlockNode * next) { this->_next = next; }
 uint32_t nBlockNode::getNext(void) { return (uint32_t)(this->_next); }
 uint32_t nBlockNode::outputAvailable(uint32_t outputNumber) { return 0; }
 uint32_t nBlockNode::readOutput(uint32_t outputNumber) { return 0; }
-void nBlockNode::triggerInput(uint32_t inputNumber, uint32_t value) { return; }
+void nBlockNode::triggerInput(nBlocks_Message message) { return; }
 void nBlockNode::step(void) { return; }
 
 
@@ -52,29 +63,57 @@ nBlockConnection::nBlockConnection(nBlockNode * srcBlock, uint32_t outputNumber,
 
 void nBlockConnection::propagate(void) {
     uint32_t data_available;
-    uint32_t data_type;
+    nBlocks_OutputType data_type;
+	nBlocks_Message message;
     
     // Check if the connected output has data available
     data_available = this->_srcBlock->outputAvailable(this->_outputNumber);
     if (data_available > 0) {
-        // Data is available. If the output type is string, this is number
-        // of chars to be read. Otherwise, this is a boolean flag
-        
+        // Data is available. If the output type is string or array, 
+		// this is number of chars/values to be read. 
+		// Otherwise, this is a boolean flag
+		        
         // Retrieve data type
         data_type = this->_srcBlock->readOutputType(this->_outputNumber);
-        // If output type is string:
-        if (data_type == OUTPUT_TYPE_STRING) {
-            // Current does the same as other types, but is set apart
-			// in this IF block for simple forward compatibility
-            uint32_t tmp = this->_srcBlock->readOutput(this->_outputNumber);
-            this->_dstBlock->triggerInput(this->_inputNumber, tmp);
-            
-        }
-        // Otherwise defaults to integer
-        else {
-            uint32_t tmp = this->_srcBlock->readOutput(this->_outputNumber);
-            this->_dstBlock->triggerInput(this->_inputNumber, tmp);
-        }
+
+		// Populate message fields
+		message.inputNumber = this->_inputNumber;
+		message.dataType = data_type;
+		message.dataLength = data_available;
+		// Reset all values
+		message.intValue = 0;
+		message.floatValue = 0.0;
+		char * empty_string = (char *)(""); // 1-char string with null
+		message.stringValue = empty_string;
+		
+		// Assign the correct value based on type
+		
+		switch (data_type) {
+			case OUTPUT_TYPE_INT:
+				// INT type is direct read
+				message.intValue = this->_srcBlock->readOutput(this->_outputNumber);
+				break;
+
+			case OUTPUT_TYPE_STRING:
+				// STRINGs are passed as uint memory addresses (char *)
+				message.stringValue = (char *)(this->_srcBlock->readOutput(this->_outputNumber));
+				break;
+
+			case OUTPUT_TYPE_ARRAY:
+				// ARRAYs are passed as uint memory addresses
+				message.pointerValue = (this->_srcBlock->readOutput(this->_outputNumber));
+				break;
+				
+			case OUTPUT_TYPE_FLOAT:
+				uint32_t packed_value = (this->_srcBlock->readOutput(this->_outputNumber));
+				// Copy memory contents of the output value into the
+				// message field, reinterpreting the bits
+				memcpy(&(message.floatValue), &(packed_value), sizeof(packed_value));
+				break;
+		}
+
+		// Finally trigger the message in the receiving node
+		this->_dstBlock->triggerInput(message);
     }
 }
 void nBlockConnection::setNext(nBlockConnection * next) {
