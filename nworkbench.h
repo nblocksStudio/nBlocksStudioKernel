@@ -103,6 +103,15 @@ typedef struct nBlocks_Message {
 } nBlocks_Message;
 
 /**
+ *  Structure data for a value which corresponds to a numeric ID
+ *  Can be used to map a value to a specific index in an array
+ */
+ typedef struct nBlocks_MappedValue {
+	 uint32_t index;
+	 uint32_t value;
+ }
+
+/**
  *  \brief Configures the n-Blocks Studio kernel and sets the Ticker.
  *  This function must be called in the main() function,  before entering the main loop.
  */
