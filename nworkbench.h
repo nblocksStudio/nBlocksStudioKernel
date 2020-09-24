@@ -109,7 +109,7 @@ typedef struct nBlocks_Message {
  typedef struct nBlocks_MappedValue {
 	 uint32_t index;
 	 uint32_t value;
- }
+ } nBlocks_MappedValue;
 
 /**
  *  \brief Configures the n-Blocks Studio kernel and sets the Ticker.
