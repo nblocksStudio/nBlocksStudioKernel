@@ -1,7 +1,7 @@
 #ifndef FIFO_H_
 #define FIFO_H_
 
-#include "mbed.h"
+#include <stdint.h>
 
 #define FIFO_SIZE 256
 #define FIFO_TYPE uint32_t

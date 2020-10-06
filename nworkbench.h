@@ -2,6 +2,7 @@
  *  \file nworkbench.h
  *  \author Fernando Cosentino
  *  \brief n-Blocks Studio Kernel main header file
+ *  Arduino compatible version
  *  
  *  
  */
@@ -9,7 +10,14 @@
 #ifndef _NWORKBENCH
 #define _NWORKBENCH
 
-#include "mbed.h"
+#include <stdint.h>
+#include <string.h>
+
+#ifdef ARDUINO
+	#include <Arduino.h>
+	#define size_t unsigned int
+#endif
+
 #include "fifo.h"
 
 #define pin_A3    P2_0
@@ -101,15 +109,6 @@ typedef struct nBlocks_Message {
 	nBlocks_OutputType dataType;
 	
 } nBlocks_Message;
-
-/**
- *  Structure data for a value which corresponds to a numeric ID
- *  Can be used to map a value to a specific index in an array
- */
- typedef struct nBlocks_MappedValue {
-	 uint32_t index;
-	 uint32_t value;
- } nBlocks_MappedValue;
 
 /**
  *  \brief Configures the n-Blocks Studio kernel and sets the Ticker.

@@ -9,8 +9,11 @@
 #endif
 
 
-
-Ticker PropagateTicker;
+#ifdef ARDUINO
+	uint32_t __currentTick;
+#else
+	Ticker PropagateTicker;
+#endif
 
 nBlockNode * __firstNode = 0;
 nBlockNode * __last_node = 0;
@@ -125,19 +128,83 @@ uint32_t nBlockConnection::getNext(void) {
 
 
 ///////////////////
-void propagateTick(void) {
-    // tickerElapsed is not a boolean flag, it is a counter instead
-    // This means two unserviced ticks will force ProgressNodes()
-    // to run twice
-    // This is a soft realtime system
-    __tickerElapsed++;
-}
+// Core periodic functions
 
+// tickerElapsed is not a boolean flag, it is a counter instead
+// This means two unserviced ticks will force ProgressNodes()
+// to run twice
+// This is a soft realtime system
 
-void SetupWorkbench(void) {
-    __tickerElapsed = 0;
-    PropagateTicker.attach(&propagateTick, 0.001);
-}
+#ifdef ARDUINO
+	// Arduino toolchain
+	void SetupWorkbench(void) {
+		init();
+		#if defined(USBCON)
+		USBDevice.attach();
+		#endif		
+		__tickerElapsed = 0;
+		__currentTick = millis();
+	}
+	
+	// In Arduino toolchain, checkTickerElapsed does both tasks:
+	// advancing the frame time and returning the value
+	uint32_t checkTickerElapsed() {
+		// millis() will overflow every 50 days, so we must handle
+		// the case when millis() is lower than __currentTick
+		uint32_t millis_value = millis();
+		uint32_t delta_time_ms;
+		if (millis_value < __currentTick) {
+			// Overflow case: we need the millis_value as well as the
+			// remaining value from __currentTick before the overflow
+			
+			// Get the last valid value before the overflow. 
+			// In a fast enough system, __currentTick will be holding 
+			// 0xFFFFFFFF which means this will result zero
+			uint32_t remaining = 0xFFFFFFFF - __currentTick; 
+			// Add the tick which caused the overflow. This is in
+			// a separate instruction to avoid actually overflowing
+			// in the operation above
+			remaining += 1; 
+			// Now remaining is the amount of time elapsed up to the
+			// overflow itself. In a fast enough system millis() will
+			// be zero as we just hit overflow. If it is not, add
+			// the extra time elapsed
+			delta_time_ms = remaining + millis_value;
+			
+		}
+		else {
+			// Normal case: simple delta
+			delta_time_ms = millis() - __currentTick;
+		}
+		// In current version frequency is fixed at 1kHz so we just
+		// add the number of milliseconds elapsed
+		// In the vast majority of calls delta_time_ms will be zero
+		__tickerElapsed += delta_time_ms;
+		
+		// Return the updated value
+		return __tickerElapsed;
+	}
+	
+	
+#else
+	// Default toolchain is mbed
+
+	void SetupWorkbench(void) {
+		__tickerElapsed = 0;
+		PropagateTicker.attach(&propagateTick, 0.001);
+	}
+
+	// In mbed toolchain, advancing the frame time is done by
+	// propagateTick while checkTickerElapsed only returns the value
+	// This is due to propagateTick being a callback from a Ticker
+	void propagateTick(void) {
+		__tickerElapsed++;
+	}
+	uint32_t checkTickerElapsed() {
+		return __tickerElapsed;
+	}
+#endif
+
 
 uint32_t ProgressNodes(void) {
     nBlockConnection * econn;
@@ -146,8 +213,10 @@ uint32_t ProgressNodes(void) {
 	// Counter to store number of iterations actually processed
     uint32_t num_iterations = 0;
     
+	// checkTickerElapsed() returns __tickerElapsed
+	// (in Arduino toolchain it also updates if before returning)
     // If __tickerElapsed == 0 this call will return immediately
-    while (__tickerElapsed > 0) {
+    while (checkTickerElapsed() > 0) {
 		// Ignore this call if we are in the middle of a frame already
         if ((__propagating == 0) && (__first_connection != 0)) {
             __propagating = 1; // Flag: we are in the middle of a frame
