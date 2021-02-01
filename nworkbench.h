@@ -83,23 +83,40 @@
 enum nBlocks_OutputType {
     OUTPUT_TYPE_INT,
     OUTPUT_TYPE_STRING,
-	OUTPUT_TYPE_FLOAT,
-	OUTPUT_TYPE_ARRAY
+    OUTPUT_TYPE_FLOAT,
+    OUTPUT_TYPE_ARRAY
 };
+
+/**
+ *  \brief Kernel tick input options
+ */
+enum nBlocks_KernelSources {
+    KERNEL_TICK_TIMER,
+    KERNEL_TICK_EXT
+};
+
+/**
+ *  \brief Structure to broadcast kernel data to all nodes prior to 
+ *  first frame
+ */
+ typedef struct nBlocks_KernelData {
+     float period;
+     uint32_t tickSource;
+ } nBlocks_KernelData;
 
 /**
  *  Structure data for messages received by destination nodes.
  *  The argument for triggerInput() is of this type.
  */
 typedef struct nBlocks_Message {
-	uint32_t inputNumber;
-	uint32_t intValue;
-	float floatValue;
-	char * stringValue;
-	uint32_t pointerValue;
-	uint32_t dataLength;
-	nBlocks_OutputType dataType;
-	
+    uint32_t inputNumber;
+    uint32_t intValue;
+    float floatValue;
+    char * stringValue;
+    uint32_t pointerValue;
+    uint32_t dataLength;
+    nBlocks_OutputType dataType;
+    
 } nBlocks_Message;
 
 /**
@@ -107,8 +124,8 @@ typedef struct nBlocks_Message {
  *  Can be used to map a value to a specific index in an array
  */
  typedef struct nBlocks_MappedValue {
-	 uint32_t index;
-	 uint32_t value;
+     uint32_t index;
+     uint32_t value;
  } nBlocks_MappedValue;
 
 /**
@@ -171,6 +188,14 @@ public:
     uint32_t getNext(void);
     
     /**
+     *  \brief Sets the kernel data received from broadcast prior to
+     *  first frame.
+     *  
+     *  \param [in] kernel_data Struct containing data for the kernel
+     */
+    void setKernelData(nBlocks_KernelData kernel_data);
+    
+    /**
      *  \brief Returns the number of data packets available to be read
      *  by a connection object (nBlockConnection class). Called externally
      *  by connection objects. Has to be implemented in descending classes.
@@ -210,7 +235,7 @@ public:
      *  the most recent value to be used in the step() method.
      *  
      *  \param [in] message A nBlocks_Message packet containing
-     *  	information about the data being received.
+     *      information about the data being received.
      */
     virtual void triggerInput(nBlocks_Message message);
     
@@ -227,6 +252,7 @@ public:
 private:
     // Pointer to next node in the traversing chain
     nBlockNode * _next;
+    
 };
 
 
@@ -281,6 +307,30 @@ public:
             outputType[i] = OUTPUT_TYPE_INT; // Output type defaults to integer
         }
     }
+    
+    /**
+     *  \brief Called after kernel data is received and stored in the
+     *  kernelData private property. The user (node developer) should
+     *  implement this method if there are particular actions to be
+     *  taken when the kernel data changes (e.g. tick period), such as
+     *  configuring libraries or external devices.
+     *  When this method is called, the kernelData property is ready.
+     *  
+     */
+    virtual void onKernelData() { return; }
+    
+    /**
+     *  \brief Stores the received kernel data into the private
+     *  kernelData property, and invokes the onKernelData method.
+     *  
+     *  \param [in] kernel_data Struct containing data for the kernel
+     */
+    void setKernelData(nBlocks_KernelData kernel_data) {
+        kernelData = kernel_data;
+        onKernelData();
+    }
+    
+    
     /**
      *  \brief Called to check if there is data available at one particular
      *  output number. Data can be regarded as either a flag (data available
@@ -351,7 +401,7 @@ public:
         }
         return;
     }
-    
+        
     /**
      *  \brief Buffer holding output data, to be modified by user.
      */
@@ -368,6 +418,12 @@ public:
      */
     uint32_t available[simpleNode_OutputSize];
 private:
+
+    /**
+     *  \brief Struct holding data received in kernel data broadcasting
+     */
+    nBlocks_KernelData kernelData;
+
     /**
      *  \brief Buffer holding output data, exposed to connections and
      *  hidden from user. Do not modify the contents of this buffer in 

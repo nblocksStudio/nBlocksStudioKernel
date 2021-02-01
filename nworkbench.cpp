@@ -22,11 +22,11 @@ uint32_t __tickerElapsed = 0;
 
 
 uint32_t PackFloat(float value) {
-	uint32_t packed = 0;
-	// Copy memory contents of value into packed
-	memcpy(&packed, &value, sizeof(packed));
-	// Return packed
-	return packed;
+    uint32_t packed = 0;
+    // Copy memory contents of value into packed
+    memcpy(&packed, &value, sizeof(packed));
+    // Return packed
+    return packed;
 }
 
 
@@ -40,6 +40,7 @@ nBlockNode::nBlockNode(void) {
 }
 void nBlockNode::setNext(nBlockNode * next) { this->_next = next; }
 uint32_t nBlockNode::getNext(void) { return (uint32_t)(this->_next); }
+void nBlockNode::setKernelData(nBlocks_KernelData kernel_data) { return; }
 uint32_t nBlockNode::outputAvailable(uint32_t outputNumber) { return 0; }
 uint32_t nBlockNode::readOutput(uint32_t outputNumber) { return 0; }
 void nBlockNode::triggerInput(nBlocks_Message message) { return; }
@@ -64,56 +65,56 @@ nBlockConnection::nBlockConnection(nBlockNode * srcBlock, uint32_t outputNumber,
 void nBlockConnection::propagate(void) {
     uint32_t data_available;
     nBlocks_OutputType data_type;
-	nBlocks_Message message;
+    nBlocks_Message message;
     
     // Check if the connected output has data available
     data_available = this->_srcBlock->outputAvailable(this->_outputNumber);
     if (data_available > 0) {
         // Data is available. If the output type is string or array, 
-		// this is number of chars/values to be read. 
-		// Otherwise, this is a boolean flag
-		        
+        // this is number of chars/values to be read. 
+        // Otherwise, this is a boolean flag
+                
         // Retrieve data type
         data_type = this->_srcBlock->readOutputType(this->_outputNumber);
 
-		// Populate message fields
-		message.inputNumber = this->_inputNumber;
-		message.dataType = data_type;
-		message.dataLength = data_available;
-		// Reset all values
-		message.intValue = 0;
-		message.floatValue = 0.0;
-		char * empty_string = (char *)(""); // 1-char string with null
-		message.stringValue = empty_string;
-		
-		// Assign the correct value based on type
-		
-		switch (data_type) {
-			case OUTPUT_TYPE_INT:
-				// INT type is direct read
-				message.intValue = this->_srcBlock->readOutput(this->_outputNumber);
-				break;
+        // Populate message fields
+        message.inputNumber = this->_inputNumber;
+        message.dataType = data_type;
+        message.dataLength = data_available;
+        // Reset all values
+        message.intValue = 0;
+        message.floatValue = 0.0;
+        char * empty_string = (char *)(""); // 1-char string with null
+        message.stringValue = empty_string;
+        
+        // Assign the correct value based on type
+        
+        switch (data_type) {
+            case OUTPUT_TYPE_INT:
+                // INT type is direct read
+                message.intValue = this->_srcBlock->readOutput(this->_outputNumber);
+                break;
 
-			case OUTPUT_TYPE_STRING:
-				// STRINGs are passed as uint memory addresses (char *)
-				message.stringValue = (char *)(this->_srcBlock->readOutput(this->_outputNumber));
-				break;
+            case OUTPUT_TYPE_STRING:
+                // STRINGs are passed as uint memory addresses (char *)
+                message.stringValue = (char *)(this->_srcBlock->readOutput(this->_outputNumber));
+                break;
 
-			case OUTPUT_TYPE_ARRAY:
-				// ARRAYs are passed as uint memory addresses
-				message.pointerValue = (this->_srcBlock->readOutput(this->_outputNumber));
-				break;
-				
-			case OUTPUT_TYPE_FLOAT:
-				uint32_t packed_value = (this->_srcBlock->readOutput(this->_outputNumber));
-				// Copy memory contents of the output value into the
-				// message field, reinterpreting the bits
-				memcpy(&(message.floatValue), &(packed_value), sizeof(packed_value));
-				break;
-		}
+            case OUTPUT_TYPE_ARRAY:
+                // ARRAYs are passed as uint memory addresses
+                message.pointerValue = (this->_srcBlock->readOutput(this->_outputNumber));
+                break;
+                
+            case OUTPUT_TYPE_FLOAT:
+                uint32_t packed_value = (this->_srcBlock->readOutput(this->_outputNumber));
+                // Copy memory contents of the output value into the
+                // message field, reinterpreting the bits
+                memcpy(&(message.floatValue), &(packed_value), sizeof(packed_value));
+                break;
+        }
 
-		// Finally trigger the message in the receiving node
-		this->_dstBlock->triggerInput(message);
+        // Finally trigger the message in the receiving node
+        this->_dstBlock->triggerInput(message);
     }
 }
 void nBlockConnection::setNext(nBlockConnection * next) {
@@ -135,6 +136,25 @@ void propagateTick(void) {
 
 
 void SetupWorkbench(void) {
+    // Broadcast kernel data to all nodes
+
+    // Get first node
+    nBlockNode * enode;
+    enode = __firstNode;
+    
+    nBlocks_KernelData kernel_data;
+    kernel_data.period = 0.001;
+    kernel_data.tickSource = KERNEL_TICK_TIMER;
+    
+    // Traverse list of nodes
+    while (enode != 0) {
+        // Broadcast node under cursor
+        enode->setKernelData(kernel_data);
+        // Move cursor to next node
+        enode = (nBlockNode *)(enode->getNext());
+    }
+
+    // Start scheduler
     __tickerElapsed = 0;
     PropagateTicker.attach(&propagateTick, 0.001);
 }
@@ -143,49 +163,49 @@ uint32_t ProgressNodes(void) {
     nBlockConnection * econn;
     nBlockNode * enode;
     
-	// Counter to store number of iterations actually processed
+    // Counter to store number of iterations actually processed
     uint32_t num_iterations = 0;
     
     // If __tickerElapsed == 0 this call will return immediately
     while (__tickerElapsed > 0) {
-		// Ignore this call if we are in the middle of a frame already
-        if ((__propagating == 0) && (__first_connection != 0)) {
+        // Ignore this call if we are in the middle of a frame already
+        if (__propagating == 0) {
             __propagating = 1; // Flag: we are in the middle of a frame
 
-			// Remove one frame tick from the down counter
-			__tickerElapsed--;
-			// Add one iteration to the up counter (return value)
-			num_iterations++;
+            // Remove one frame tick from the down counter
+            __tickerElapsed--;
+            // Add one iteration to the up counter (return value)
+            num_iterations++;
 
             // --------
-			// Propagate connections
-			
+            // Propagate connections
+            
             // Get cursor to first connection (connection stage entry point)
-			econn = __first_connection;
-			// Traverse list of connections
+            econn = __first_connection;
+            // Traverse list of connections
             while (econn != 0) {
-				// Propagate connection under cursor
+                // Propagate connection under cursor
                 econn->propagate();
-				// Move cursor to next connection
+                // Move cursor to next connection
                 econn = (nBlockConnection *)(econn->getNext());
             }
             
-			// --------
+            // --------
             // Step blocks' state machines and fifos
             
-			// Get cursor to first node (step stage entry point)
-			enode = __firstNode;
-			// Traverse list of nodes
+            // Get cursor to first node (step stage entry point)
+            enode = __firstNode;
+            // Traverse list of nodes
             while (enode != 0) {
-				// Step node under cursor
+                // Step node under cursor
                 enode->step();
-				// Move cursor to next node
+                // Move cursor to next node
                 enode = (nBlockNode *)(enode->getNext());
             }
             __propagating = 0; // Flag: no longer inside a frame
         }
     }
-	// Return the number of frames that were actually processed
+    // Return the number of frames that were actually processed
     return num_iterations;
 }
 
