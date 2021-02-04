@@ -20,6 +20,11 @@ uint32_t __propagating = 0;
 
 uint32_t __tickerElapsed = 0;
 
+nBlocks_KernelData __kernel_data = {
+    .period = 0.001,
+    .tickSource = KERNEL_TICK_TIMER,
+    .sourcePin = NC
+};
 
 uint32_t PackFloat(float value) {
     uint32_t packed = 0;
@@ -134,6 +139,17 @@ void propagateTick(void) {
     __tickerElapsed++;
 }
 
+void KernelPeriod(float new_period) {
+    // Prevents too low a period
+    if (new_period < 0.0001) return;
+    
+    __kernel_data.period = new_period;
+}
+
+void KernelTickSource(nBlocks_KernelSources source_flag, PinName source_pin) {
+    __kernel_data.tickSource = source_flag;
+    __kernel_data.sourcePin = source_pin;
+}
 
 void SetupWorkbench(void) {
     // Broadcast kernel data to all nodes
@@ -142,21 +158,28 @@ void SetupWorkbench(void) {
     nBlockNode * enode;
     enode = __firstNode;
     
-    nBlocks_KernelData kernel_data;
-    kernel_data.period = 0.001;
-    kernel_data.tickSource = KERNEL_TICK_TIMER;
-    
     // Traverse list of nodes
     while (enode != 0) {
         // Broadcast node under cursor
-        enode->setKernelData(kernel_data);
+        enode->setKernelData(__kernel_data);
         // Move cursor to next node
         enode = (nBlockNode *)(enode->getNext());
     }
 
     // Start scheduler
     __tickerElapsed = 0;
-    PropagateTicker.attach(&propagateTick, 0.001);
+    switch (__kernel_data.tickSource) {
+        // Initialize the selected tick source
+        
+        case KERNEL_TICK_TIMER:
+            PropagateTicker.attach(&propagateTick, __kernel_data.period);
+            break;
+            
+        case KERNEL_TICK_EXT:
+            
+            break;
+    }
+    
 }
 
 uint32_t ProgressNodes(void) {

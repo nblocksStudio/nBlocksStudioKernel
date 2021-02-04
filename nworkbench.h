@@ -102,6 +102,7 @@ enum nBlocks_KernelSources {
  typedef struct nBlocks_KernelData {
      float period;
      uint32_t tickSource;
+     PinName sourcePin;
  } nBlocks_KernelData;
 
 /**
@@ -148,7 +149,26 @@ void SetupWorkbench(void);
  */
 uint32_t ProgressNodes(void);
 
+/**
+ *  \brief Modifies the internal tick period for the kernel, relevant
+ *  only if the tick source is an internal timer. Nodes can call this
+ *  at will to set the kernel tick period. If more than one node calls
+ *  this method,  the last call will be effective.
+ *  
+ *  \param [in] new_period Period in seconds (as float)
+ */
+void KernelPeriod(float new_period);
 
+/**
+ *  \brief Modifies the kernel tick source. If source is KERNEL_TICK_EXT
+ *  the source_pin argument is used as physical interrupt pin, otherwise
+ *  source_pin is ignored and can be omitted.
+ *  
+ *  \param [in] source_flag One of nBlocks_KernelSources constant values
+ *      indicating tick source
+ *  \param [in] source_pin PinName if source_flag is KERNEL_TICK_EXT
+ */
+void KernelTickSource(nBlocks_KernelSources source_flag, PinName source_pin);
 
 /**
  *  \brief Packs a float value into an unsigned integer. That is, 
