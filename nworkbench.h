@@ -171,6 +171,13 @@ void KernelPeriod(float new_period);
 void KernelTickSource(nBlocks_KernelSources source_flag, PinName source_pin);
 
 /**
+ *  \brief Enables a pulse in a physical pin indicating frame duration.
+ *  
+ *  \param [in] pin The GPIO pin to output the pulse
+ */
+void KernelEnableFramePulse(PinName pin);
+
+/**
  *  \brief Packs a float value into an unsigned integer. That is, 
  *  reinterpret the raw bits allowing it to be stored in a variable
  *  of type uint32_t.

@@ -11,6 +11,8 @@
 
 
 Ticker PropagateTicker;
+DigitalOut * __framePulse = 0;
+InterruptIn * __tickPin = 0;
 
 nBlockNode * __firstNode = 0;
 nBlockNode * __last_node = 0;
@@ -151,6 +153,13 @@ void KernelTickSource(nBlocks_KernelSources source_flag, PinName source_pin) {
     __kernel_data.sourcePin = source_pin;
 }
 
+void KernelEnableFramePulse(PinName pin) {
+    if (!__framePulse && (pin != NC)) {
+        __framePulse = new DigitalOut(pin);
+        __framePulse->write(0);
+    }
+}
+
 void SetupWorkbench(void) {
     // Broadcast kernel data to all nodes
 
@@ -176,7 +185,8 @@ void SetupWorkbench(void) {
             break;
             
         case KERNEL_TICK_EXT:
-            
+            __tickPin = new InterruptIn(__kernel_data.sourcePin);
+            __tickPin->rise(&propagateTick);
             break;
     }
     
@@ -194,6 +204,10 @@ uint32_t ProgressNodes(void) {
         // Ignore this call if we are in the middle of a frame already
         if (__propagating == 0) {
             __propagating = 1; // Flag: we are in the middle of a frame
+
+            // If we have a framePulse pin configured, set it to ON
+            if (__framePulse) __framePulse->write(1);
+            
 
             // Remove one frame tick from the down counter
             __tickerElapsed--;
@@ -225,6 +239,10 @@ uint32_t ProgressNodes(void) {
                 // Move cursor to next node
                 enode = (nBlockNode *)(enode->getNext());
             }
+            
+            // If we have a framePulse pin configured, set it to OFF
+            if (__framePulse) __framePulse->write(0);
+            
             __propagating = 0; // Flag: no longer inside a frame
         }
     }
